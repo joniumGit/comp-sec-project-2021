@@ -18,18 +18,13 @@ class Client(Thread):
     def run(self) -> None:
         super().run()
         print("Client starting...")
-        message = "Hello, 你好. This is a hidden message. \nHope everything is well"
-        print(f"Message:\n{message}")
-        client.main(
-            dest='127.0.0.1',
-            message=message
-        )
+        client.main()
 
 
 server_thread = Server()
 client_thread = Client()
 
 server_thread.start()
-time.sleep(1)
+time.sleep(0.1)
 client_thread.start()
 time.sleep(0.5)
