@@ -17,7 +17,7 @@ class IPMessager:
 
     @staticmethod
     def with_dummy(packet: IP) -> Packet:
-        return packet / UDP(dport=5604)
+        return packet / UDP(dport=5004, sport=5003)
 
     def nop_coded(self, data: bytes) -> List[IP]:
         dst = self.dst
