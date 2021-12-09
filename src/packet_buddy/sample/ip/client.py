@@ -1,6 +1,6 @@
 import socket
 
-from ...messagers import *
+from ..messagers import *
 
 
 def main(dest: str, message: str):

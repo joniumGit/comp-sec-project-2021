@@ -1,6 +1,6 @@
 import socket
 
-from ...messagers import IPDecoder
+from ..messagers import IPDecoder
 
 
 def handle_connection(s: socket.socket):
