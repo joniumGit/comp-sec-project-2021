@@ -96,6 +96,13 @@ class MessageContainer(Generic[MT]):
         ]
         return f"MessageContainer({data[0]}, {data[1]}, {data[2] if data[2] is None else data[2].json()})"
 
+    def __add__(self, other: 'MessageContainer[MT]'):
+        self.payload + other.payload
+        return self
+
+    def __bool__(self):
+        return isinstance(self.payload, self._type)
+
 
 class BaseClass(ABC):
     _type: Type[MT]

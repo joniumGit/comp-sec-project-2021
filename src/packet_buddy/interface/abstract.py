@@ -1,15 +1,15 @@
 import logging
 import socket
+import time
 from abc import abstractmethod, ABC
 from queue import Queue, Empty
 from threading import Lock
 from threading import Thread, Event
-from typing import Callable
+from typing import Callable, List
 
 from pydantic import BaseModel
 
-from ..interface import Client, Server
-from ..interface import MessageContainer, MT, PACKET_MAX
+from .interfaces import Client, Server, MessageContainer, MT, PACKET_MAX
 
 
 class BasicMessage(BaseModel):
@@ -17,27 +17,27 @@ class BasicMessage(BaseModel):
     verifier: str
 
 
-def make_socket():
-    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-    s.setsockopt(socket.SOL_IP, socket.IP_HDRINCL, 1)
-    return s
+class ProtocolFilter(ABC):
+
+    @abstractmethod
+    def __call__(self, data: bytes) -> bool:
+        pass
 
 
 class ProtocolReverseAdapter(ABC):
 
-    @abstractmethod
-    def __call__(self, message: bytes, wrapper: MessageContainer[MT]) -> MessageContainer[MT]:
-        pass
+    def is_eom(self, data: bytes) -> bool:
+        return True
 
     @abstractmethod
-    def __invert__(self) -> 'ProtocolAdapter':
+    def __call__(self, message: List[bytes], wrapper: MessageContainer[MT]) -> MessageContainer[MT]:
         pass
 
 
 class ProtocolAdapter(ABC):
 
     @abstractmethod
-    def __call__(self, message: MessageContainer[MT]) -> bytes:
+    def __call__(self, message: MessageContainer[MT]) -> List[bytes]:
         pass
 
     @abstractmethod
@@ -49,6 +49,7 @@ class TaskBase(Thread):
 
     def __init__(
             self,
+            _socket: socket.socket,
             queue: Queue,
             message_provider: Callable,
             message_converter: ProtocolAdapter,
@@ -57,9 +58,9 @@ class TaskBase(Thread):
     ):
         super(TaskBase, self).__init__(daemon=True)
         self.queue = queue
-        self.socket = make_socket()
+        self.socket = _socket
         self.msg = message_provider
-        self.convert = message_converter
+        self.converter = message_converter
         self._kill = kill_event
         self.log = log
 
@@ -97,36 +98,45 @@ class TaskBase(Thread):
 
 class Sender(TaskBase):
 
-    def send(self, message: MessageContainer[MT]):
-        self.log.debug("Sending Message")
-        self.socket.sendto(
-            self.convert(message),
-            (message.ip, message.port)
-        )
-
     def action(self):
         try:
-            self.send(self.queue.get(block=True))
+            message = self.queue.get(block=True)
+            self.log.debug("Message Send Event")
+            for packet in self.converter(message):
+                self.socket.sendto(packet, (message.ip, message.port))
         except Exception as e:
             self.log.exception("Sender killed", exc_info=e)
             raise e
 
 
 class Receiver(TaskBase):
+    converter: ProtocolReverseAdapter
 
-    def __init__(self, *args, **kwargs):
-        super(Receiver, self).__init__(*args, **kwargs)
-        self.convert = ~self.convert
+    def __init__(self, _filter: ProtocolFilter, *args):
+        super(Receiver, self).__init__(*args)
+        self._filter = _filter
+        self.data_store = dict()
 
     def receive(self) -> MessageContainer[MT]:
+        ds = self.data_store
         while not self._kill.is_set():
             data, _, _, addr = self.socket.recvmsg(PACKET_MAX)
-            try:
-                m = self.convert(data, self.msg() << addr)
-                if m is not None:
-                    return m
-            except:
-                pass
+            if self._filter(data):
+                self.log.debug("Message Receive Event")
+                if addr not in ds:
+                    ds[addr] = [list(), time.time()]
+                ds[addr][0].append(data)
+                ds[addr][1] = time.time()
+                if self.converter.is_eom(data):
+                    try:
+                        return self.converter(ds.pop(addr)[0], self.msg() << addr)
+                    finally:
+                        to_remove = list()
+                        for k in ds:
+                            if time.time() - ds[k][1] > 10:
+                                to_remove.append(k)
+                        for k in to_remove:
+                            ds.pop(k)
 
     def action(self) -> None:
         try:
@@ -142,10 +152,11 @@ class AbstractTasker(ABC):
     queue_size: int = 1000
     log: logging.Logger = None
 
-    def __init__(self, /, protocol: ProtocolAdapter):
+    def __init__(self, /, protocol: ProtocolAdapter, _filter: ProtocolFilter):
         self.tl = Lock()
         self._kill = Event()
         self.protocol = protocol
+        self._filter = _filter
         self.__sender = None
         self.__receiver = None
 
@@ -153,12 +164,31 @@ class AbstractTasker(ABC):
     def new_message(self):
         pass
 
+    @abstractmethod
+    def new_socket(self):
+        pass
+
     def start(self):
         self.send_queue = Queue(self.queue_size)
         self.recv_queue = Queue(self.queue_size)
 
-        self.__sender = Sender(self.send_queue, self.new_message, self.protocol, self.log, self._kill)
-        self.__receiver = Receiver(self.recv_queue, self.new_message, self.protocol, self.log, self._kill)
+        self.__sender = Sender(
+            self.new_socket(),
+            self.send_queue,
+            self.new_message,
+            self.protocol,
+            self.log,
+            self._kill
+        )
+        self.__receiver = Receiver(
+            self._filter,
+            self.new_socket(),
+            self.recv_queue,
+            self.new_message,
+            ~self.protocol,
+            self.log,
+            self._kill
+        )
 
         self.__sender.start()
         self.__receiver.start()
@@ -198,8 +228,8 @@ class AbstractClient(AbstractTasker, Client):
     log = logging.getLogger('Client')
 
     @abstractmethod
-    def __init__(self, /, protocol: ProtocolAdapter):
-        super().__init__(protocol)
+    def __init__(self, /, protocol: ProtocolAdapter, _filter: ProtocolFilter):
+        super().__init__(protocol, _filter)
 
     def new_message(self):
         return super(Client, self).new_message()
@@ -209,8 +239,8 @@ class AbstractServer(AbstractTasker, Server):
     log = logging.getLogger('Server')
 
     @abstractmethod
-    def __init__(self, /, protocol: ProtocolAdapter):
-        super().__init__(protocol)
+    def __init__(self, /, protocol: ProtocolAdapter, _filter: ProtocolFilter):
+        super().__init__(protocol, _filter)
 
     def new_message(self):
         return super(Server, self).new_message()
@@ -219,4 +249,5 @@ class AbstractServer(AbstractTasker, Server):
         pass
 
 
-__all__ = ['AbstractClient', 'AbstractServer', 'ProtocolAdapter', 'ProtocolReverseAdapter', 'BasicMessage']
+__all__ = ['AbstractClient', 'AbstractServer', 'ProtocolAdapter', 'ProtocolReverseAdapter', 'BasicMessage',
+           'ProtocolFilter']
