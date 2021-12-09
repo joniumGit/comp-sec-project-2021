@@ -1,8 +1,35 @@
-import time
 from threading import Thread
 
-from . import ICMPClient, ICMPServer, BasicMessage
-from ..interface import MessageContainer
+from . import ICMPClient as ClientBase, ICMPServer as ServerBase, BasicMessage
+
+TEST_MESSAGES = {
+    'Hello World': 'Cool',
+    'Cool': 'OK',
+    'OK': 'GOT IT',
+    'GOT IT': 'ME too',
+    'ME too': 'Exit'
+}
+
+
+class IMPL:
+
+    def handle_message(self, message):
+        try:
+            self.log.info(str(message))
+            message.payload.message = TEST_MESSAGES[message.payload.message]
+            self.send_message(message)
+        except KeyError:
+            self.log.info('Done')
+            self.send_queue.put(message, block=True)
+            self.stop()
+
+
+class ICMPClient(IMPL, ClientBase):
+    pass
+
+
+class ICMPServer(IMPL, ServerBase):
+    pass
 
 
 class Server(Thread):
@@ -10,16 +37,10 @@ class Server(Thread):
     def run(self) -> None:
         super().run()
         print("Server starting...")
-
-        def processor(m: MessageContainer[BasicMessage]):
-            if m.payload.message[-1] == 'd':
-                m.payload.message += " 1"
-            else:
-                split = m.payload.message.rsplit(' ', maxsplit=1)
-                m.payload.message = split[0] + f" {int(split[-1]) + 1}"
-
-        with ICMPServer[BasicMessage](processor=processor) as server:
-            server.receive_message()
+        with ICMPServer[BasicMessage]() as server:
+            self._kill = server._kill
+            server.serve()
+        print("Server exiting...")
 
 
 class Client(Thread):
@@ -28,23 +49,19 @@ class Client(Thread):
         super().run()
         print("Client starting...")
         with ICMPClient[BasicMessage]() as client:
+            self._kill = client._kill
             m = client.new_message()
             m << BasicMessage(message="Hello World", verifier="lol")
-            while True:
-                client.send_message(m)
-                while True:
-                    resp = client.receive_message()
-                    if resp is None:
-                        continue
-                    else:
-                        m = resp
-                        break
+            client.send_message(m)
+            client.serve()
+        print("Client exiting...")
 
 
-server_thread = Server()
-client_thread = Client()
+server_thread = Server(daemon=True)
+client_thread = Client(daemon=True)
 
 server_thread.start()
-time.sleep(0.1)
 client_thread.start()
-time.sleep(0.5)
+
+server_thread.join()
+client_thread.join()

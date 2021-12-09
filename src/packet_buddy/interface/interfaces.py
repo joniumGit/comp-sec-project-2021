@@ -148,8 +148,8 @@ class BaseClass(ABC):
 
 
 class Client(BaseClass):
-    server_ip: str
-    port: int
+    server_ip: str = '127.0.0.1'
+    port: int = 0
 
 
 class Server(BaseClass):
