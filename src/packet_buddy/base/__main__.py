@@ -21,4 +21,4 @@ time.sleep(1)
 m = IPMessager[Data](1)
 m.message[message('a', 'b', 'hello')] >> ('127.0.0.1', IPMessager.DUMMY_UDP)
 
-time.sleep(2)
+time.sleep(1)

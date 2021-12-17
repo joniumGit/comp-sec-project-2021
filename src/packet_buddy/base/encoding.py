@@ -1,6 +1,5 @@
 import socket
 import time
-from typing import Tuple
 
 from scapy.layers.inet import IP, ICMP, IPOption_Timestamp, UDP
 
@@ -31,12 +30,12 @@ class IPMessager(TypedMessager, Generic[PT]):
 
     def send(self, m: Message[PT]):
         with make_socket(socket.IPPROTO_UDP) as s:
-            for part in Shifter.encode_message(bytes(m), self.id):
+            for part in Shifter.encode_message(bytes(m), self.id, bytes_per_option=16):
                 s.sendto(
                     bytes(
                         IP(
                             dst=m.target[0],
-                            options=timestamp(part.to_bytes(4, byteorder='big', signed=False))[0] # [IPOption_Timestamp(flg=0, timestamp=part)]
+                            options=part
                         ) / UDP(sport=IPMessager.DUMMY_UDP, dport=IPMessager.DUMMY_UDP)
                     ),
                     m.target
@@ -64,18 +63,13 @@ class IPMessager(TypedMessager, Generic[PT]):
                 while True:
                     _raw_bytes, _, _, addr = s.recvmsg(IPMessager.PACKET)
                     try:
-                        packet: IP = IP(_raw_bytes)
-                        try:
-                            ts = packet.options[0]
-                        except:
-                            continue
+                        ts = _raw_bytes[20:]
                         tid = (Shifter.get_id(ts), *addr)
                         if Shifter.is_start(ts):
                             sender = Shifter.get_id(ts)
-                            print(sender)
                             if sender != self.id:
                                 self.data_cache[tid] = [ts], time.time()
-                        if tid in self.data_cache:
+                        elif tid in self.data_cache:
                             d = self.data_cache.pop(tid)[0]
                             d.append(ts)
                             self.data_cache[tid] = d, time.time()
@@ -128,7 +122,6 @@ class ICMPMessager(TypedMessager, Generic[PT]):
         while True:
             with make_socket() as s:
                 data, _, _, addr = s.recvmsg(PACKET_MAX)
-
 
 
 __all__ = ['ICMPMessager', 'IPMessager']
