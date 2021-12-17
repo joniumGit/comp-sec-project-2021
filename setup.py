@@ -22,7 +22,8 @@ setuptools.setup(
     ],
     install_requires=[
         "scapy",
-        "cryptography"
+        "cryptography",
+        "pydantic"
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
