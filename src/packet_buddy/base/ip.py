@@ -29,7 +29,7 @@ def icmp_wrap(target: str, data: bytes):
 
 def icmp_payload(target: str, data: bytes):
     time.sleep(0.5)
-    return bytes(IP(dst=target) / ICMP(type=0) / data)
+    return bytes(IP(dst=target) / ICMP(type=8) / data)
 
 
 def ip_option(raw_bytes: bytes) -> bytes:
@@ -86,7 +86,7 @@ class IPMessager(TypedMessager, Generic[PT]):
     def clean(self):
         rem = list()
         for k, v in self.data_cache.items():
-            if time.time() - v > IPMessager.CLEAN_TIME:
+            if time.time() - v[1] > IPMessager.CLEAN_TIME:
                 rem.append(k)
         for k in rem:
             self.data_cache.pop(k)
@@ -123,6 +123,7 @@ class IPMessager(TypedMessager, Generic[PT]):
                                 callback(m)
                         if time.time() - cleaned_at > IPMessager.CLEAN_TIME:
                             self.clean()
+                            cleaned_at = time.time()
                     except Exception as e:
                         raise e
                         pass
