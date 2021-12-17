@@ -9,6 +9,9 @@ from .message import message, Data
 SECRET = b'super duper secret key! Encrypt!'
 ICMP = False
 
+# Well, this is bad
+# https://www.stigviewer.com/stig/cisco_ios_router_rtr/2020-06-30/finding/V-96637
+# https://www2.eecs.berkeley.edu/Pubs/TechRpts/2005/EECS-2005-24.pdf
 
 class ST(Thread):
 
