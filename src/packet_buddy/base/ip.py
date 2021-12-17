@@ -27,6 +27,38 @@ def icmp_wrap(target: str, data: bytes):
     )
 
 
+def icmp_payload(target: str, data: bytes):
+    time.sleep(0.5)
+    return bytes(IP(dst=target) / ICMP(type=0) / data)
+
+
+def ip_option(raw_bytes: bytes) -> bytes:
+    return raw_bytes[20:]
+
+
+def recover_icmp_payload(raw_bytes: bytes) -> bytes:
+    return raw_bytes[28:]
+
+
+PROTO_FUNC_MAP = {
+    'icmp-pl': icmp_payload,
+    'ip-icmp': icmp_wrap,
+    'ip-udp': udp_wrap,
+}
+
+PROTO_REVERSE_MAP = {
+    'icmp-pl': recover_icmp_payload,
+    'ip-icmp': ip_option,
+    'ip-udp': ip_option,
+}
+
+PROTO_MAP = {
+    'icmp-pl': socket.IPPROTO_ICMP,
+    'ip-icmp': socket.IPPROTO_ICMP,
+    'ip-udp': socket.IPPROTO_UDP,
+}
+
+
 class IPMessager(TypedMessager, Generic[PT]):
     DUMMY_UDP = 1021
     CLEAN_TIME = 5
@@ -36,15 +68,14 @@ class IPMessager(TypedMessager, Generic[PT]):
             _id: int,
             secret: bytes,
             bpo: int,
-            protocol: int = socket.IPPROTO_UDP,
+            protocol: str = 'icmp-pl',
     ):
         self.id = _id
         self.secret = secret
-        if not (3 < bpo < 33 and bpo % 4 == 0):
-            raise ValueError()
         self.bpo = bpo
-        self.protocol = protocol
-        self.wrap = udp_wrap if protocol == socket.IPPROTO_UDP else icmp_wrap
+        self.protocol = PROTO_MAP[protocol]
+        self.wrap = PROTO_FUNC_MAP[protocol]
+        self.reverse = PROTO_REVERSE_MAP[protocol]
         self.data_cache = {}
 
     def send(self, m: Message[PT]):
@@ -72,7 +103,7 @@ class IPMessager(TypedMessager, Generic[PT]):
                 while True:
                     _raw_bytes, _, _, addr = s.recvmsg(PACKET_MAX)
                     try:
-                        ts = _raw_bytes[20:]
+                        ts = self.reverse(_raw_bytes)
                         tid = (Shifter.get_id(ts), *addr)
                         if Shifter.is_start(ts):
                             sender = Shifter.get_id(ts)

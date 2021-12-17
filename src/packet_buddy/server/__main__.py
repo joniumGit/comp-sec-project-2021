@@ -1,6 +1,6 @@
 from ..base import IPMessager, Data, Message
 
-m = IPMessager[Data](69, b'super duper secret key! Encrypt!', 16)
+m = IPMessager[Data](69, b'super duper secret key! Encrypt!', 16, protocol='icmp-pl')
 
 
 def on_message(message: Message):
