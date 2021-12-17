@@ -12,11 +12,9 @@ BPO = Literal[
     20,
     24,
     28,
-    32,  # Minus empty TS
+    32,
     # 36  # Minus header
 ]
-
-USE_EMPTY_TS = False
 
 
 class Protocol:
@@ -45,10 +43,9 @@ class Utils:
 
     @staticmethod
     def to_option(header: bytes, data: bytes) -> bytes:
-        length = struct.pack("!B", CUSTOM_HEADER_SIZE + len(data) + OPTION_HEADER_SIZE + 4 * USE_EMPTY_TS)
-        pointer = struct.pack("!B", CUSTOM_HEADER_SIZE + len(data) + OPTION_HEADER_SIZE + 1 + 4 * USE_EMPTY_TS)
-        # return b'\x44' + length + pointer + b'\x03' + header + data
-        return b'\x44' + length + pointer + b'\x00' + header + data + (b'\x00' * 4) * USE_EMPTY_TS
+        length = struct.pack("!B", CUSTOM_HEADER_SIZE + len(data) + OPTION_HEADER_SIZE)
+        pointer = struct.pack("!B", CUSTOM_HEADER_SIZE + len(data) + OPTION_HEADER_SIZE + 1)
+        return b'\x44' + length + pointer + b'\x03' + header + data
 
     @staticmethod
     def to_data(option: bytes) -> Tuple[bytes, bytes]:

@@ -7,7 +7,7 @@ from .ip import IPMessager
 from .message import message, Data
 
 SECRET = b'super duper secret key! Encrypt!'
-ICMP = True
+ICMP = False
 
 
 class ST(Thread):
@@ -28,14 +28,14 @@ class ST(Thread):
 
 server = ST()
 server.daemon = True
-server.start()
+# server.start()
 
 time.sleep(1)
 
 if ICMP:
     m = IPMessager[Data](1, SECRET, 16, socket.IPPROTO_ICMP)
 else:
-    m = IPMessager[Data](1, SECRET, 16)
+    m = IPMessager[Data](1, SECRET, 4)
 m.message[message('a', 'b', 'hello')] >> ('127.0.0.1', IPMessager.DUMMY_UDP)
 
 
