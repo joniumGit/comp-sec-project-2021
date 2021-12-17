@@ -28,7 +28,7 @@ def icmp_wrap(target: str, data: bytes):
 
 
 class IPMessager(TypedMessager, Generic[PT]):
-    DUMMY_UDP = 8521
+    DUMMY_UDP = 1021
     CLEAN_TIME = 5
 
     def __init__(

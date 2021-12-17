@@ -22,6 +22,7 @@ setuptools.setup(
     ],
     install_requires=[
         "scapy",
+        "cryptography"
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
