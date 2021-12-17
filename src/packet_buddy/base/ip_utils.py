@@ -37,9 +37,10 @@ class MessageType:
     """
     0 - 15
     """
-    DATA: int = 1
-    ENCRYPTION: int = 2
-    ID: int = 4
+    DATA: int = 1  # 0001
+    ENCRYPTION: int = 2  # 0010
+    EC_PUB_REQ: int = 4  # 0110
+    EC_CON_REQ: int = 4  # 1010
 
 
 class Utils:
