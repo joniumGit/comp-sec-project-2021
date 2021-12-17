@@ -1,36 +1,26 @@
 import socket
 import time
 
-from scapy.layers.inet import IP, ICMP, IPOption_Timestamp, UDP
+from scapy.layers.inet import IP, UDP
 
-from .flags import *
 from .interface import *
-
-CLEAN_TIME = 5
-
-
-def get_payload(packet: IP) -> int:
-    return packet.options[0].timestamp
-
-
-def make_socket(protocol: int = socket.IPPROTO_ICMP):
-    import socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, protocol)
-    s.setsockopt(socket.SOL_IP, socket.IP_HDRINCL, 1)
-    return s
+from .ip_utils import *
+from .utils import *
 
 
 class IPMessager(TypedMessager, Generic[PT]):
     DUMMY_UDP = 8521
     PACKET = PACKET_MAX
+    CLEAN_TIME = 5
 
-    def __init__(self, _id: int):
+    def __init__(self, _id: int, secret: bytes):
         self.id = _id
+        self.secret = secret
         self.data_cache = {}
 
     def send(self, m: Message[PT]):
         with make_socket(socket.IPPROTO_UDP) as s:
-            for part in Shifter.encode_message(bytes(m), self.id, bytes_per_option=16):
+            for part in Shifter.encode_message(bytes(m), self.id, bytes_per_option=16, secret=self.secret):
                 s.sendto(
                     bytes(
                         IP(
@@ -50,7 +40,7 @@ class IPMessager(TypedMessager, Generic[PT]):
     def _clean(self):
         rem = list()
         for k, v in self.data_cache.items():
-            if time.time() - v > CLEAN_TIME:
+            if time.time() - v > IPMessager.CLEAN_TIME:
                 rem.append(k)
         for k in rem:
             self.data_cache.pop(k)
@@ -76,52 +66,14 @@ class IPMessager(TypedMessager, Generic[PT]):
                             if Shifter.is_end(ts):
                                 self._receive(
                                     addr,
-                                    Shifter.decode_message(self.data_cache.pop(tid)[0]),
+                                    Shifter.decode_message(self.data_cache.pop(tid)[0], secret=self.secret),
                                     callback
                                 )
-                        if time.time() - cleaned_at > CLEAN_TIME:
+                        if time.time() - cleaned_at > IPMessager.CLEAN_TIME:
                             self._clean()
                     except Exception as e:
                         raise e
                         pass
 
 
-class ICMPMessager(TypedMessager, Generic[PT]):
-
-    def send(self, m: Message):
-        data = bytes(m)
-        ts = 10
-
-        def send(d: bytes):
-            with make_socket() as s:
-                s.sendto(
-                    bytes(
-                        IP(
-                            dst=m.target[0],
-                            options=[
-                                IPOption_Timestamp(flg=0, timestamp=ts)
-                            ]
-                        )
-                        / ICMP(type=0)
-                        / d
-                    ),
-                    m.target
-                )
-
-        while len(data) > 60000:
-            out = data[:60000]
-            data = data[60000:]
-            send(out)
-            ts += 1
-
-        ts = 9
-        send(data)
-
-    def receive(self, callback: Callable[[Message[PT]], NoReturn]):
-        data = {}
-        while True:
-            with make_socket() as s:
-                data, _, _, addr = s.recvmsg(PACKET_MAX)
-
-
-__all__ = ['ICMPMessager', 'IPMessager']
+__all__ = ['IPMessager']

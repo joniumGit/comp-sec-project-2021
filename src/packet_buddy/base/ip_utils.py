@@ -9,6 +9,7 @@ OPTION_HEADER_SIZE = 4
 BPO = Literal[
     4,
     8,
+    12,
     16,
     20,
     24,
@@ -18,8 +19,6 @@ BPO = Literal[
 ]
 
 USE_EMPTY_TS = False
-
-SECRET = b'super duper secret key! Encrypt!'
 
 
 class Protocol:
@@ -117,32 +116,38 @@ class Shifter:
         return option[OPTION_HEADER_SIZE] & 0x0f
 
     @staticmethod
-    def encode_message(data: bytes, sender_id: int, /, bytes_per_option: BPO = 16) -> List[bytes]:
+    def encode_message(
+            data: bytes,
+            sender_id: int,
+            /,
+            secret: bytes,
+            bytes_per_option: BPO = 16,
+    ) -> List[bytes]:
         import os
-        from cryptography.hazmat.primitives.ciphers import Cipher
-        from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
         _id = sender_id & 0xffff
 
-        nonce = os.urandom(16)
-        nonce_data = Utils.encode(nonce, _type=MessageType.ENCRYPTION, _id=_id, size=min([16, bytes_per_option]))
+        nonce = os.urandom(12)
+        nonce_data = Utils.encode(nonce, _type=MessageType.ENCRYPTION, _id=_id, size=min([12, bytes_per_option]))
 
-        cip = Cipher(ChaCha20(SECRET, nonce), mode=None).encryptor()
-        raw_bytes = cip.update(data)
+        cip = ChaCha20Poly1305(secret)
+        raw_bytes = cip.encrypt(nonce, data, _id.to_bytes(4, byteorder='big', signed=False))
         encoded_data = Utils.encode(raw_bytes, _type=MessageType.DATA, _id=_id, size=bytes_per_option)
-
-        print(nonce_data)
-        print(encoded_data)
 
         return Utils.set_start_end(nonce_data + encoded_data)
 
     @staticmethod
-    def decode_message(data: List[bytes]) -> bytes:
-        from cryptography.hazmat.primitives.ciphers import Cipher
-        from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
+    def decode_message(data: List[bytes], /, secret: bytes) -> bytes:
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+        from cryptography.exceptions import InvalidTag
 
+        _id = Shifter.get_id(data[0])
         nonce = Utils.decode([part for part in data if Shifter.get_type(part) == MessageType.ENCRYPTION])
         data = Utils.decode([part for part in data if Shifter.get_type(part) == MessageType.DATA]).rstrip(b'\x00')
 
-        cip = Cipher(ChaCha20(SECRET, nonce), mode=None).decryptor()
-        return cip.update(data)
+        cip = ChaCha20Poly1305(secret)
+        try:
+            return cip.decrypt(nonce, data, _id.to_bytes(4, byteorder='big', signed=False))
+        except InvalidTag:
+            raise ValueError("Failed to verify")
