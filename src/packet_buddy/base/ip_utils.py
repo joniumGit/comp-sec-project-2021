@@ -1,8 +1,6 @@
 import struct
 from typing import List, Tuple, Literal
 
-PACKET_MAX = 65535
-
 TIMESTAMP_SIZE = 4
 CUSTOM_HEADER_SIZE = 4
 OPTION_HEADER_SIZE = 4

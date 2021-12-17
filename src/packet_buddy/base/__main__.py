@@ -21,7 +21,7 @@ class ST(Thread):
         def on_message(d):
             print(d.payload.json())
             d.payload.sender = "b"
-            s.message[message("server", "data", "hello hello")] >> d.target
+            s.message[message("server", "Server Hello", d.payload.content)] >> d.target
 
         s.receive(on_message)
 

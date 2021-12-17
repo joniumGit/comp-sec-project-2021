@@ -1,3 +1,6 @@
+PACKET_MAX = 65535
+
+
 def make_socket(protocol: int):
     import socket
     s = socket.socket(socket.AF_INET, socket.SOCK_RAW, protocol)

@@ -18,6 +18,7 @@ def udp_wrap(target: str, data: bytes):
 
 
 def icmp_wrap(target: str, data: bytes):
+    time.sleep(0.5)
     return bytes(
         IP(
             dst=target,
@@ -28,7 +29,6 @@ def icmp_wrap(target: str, data: bytes):
 
 class IPMessager(TypedMessager, Generic[PT]):
     DUMMY_UDP = 8521
-    PACKET = PACKET_MAX
     CLEAN_TIME = 5
 
     def __init__(
@@ -70,7 +70,7 @@ class IPMessager(TypedMessager, Generic[PT]):
             cleaned_at = time.time()
             with make_socket(self.protocol) as s:
                 while True:
-                    _raw_bytes, _, _, addr = s.recvmsg(IPMessager.PACKET)
+                    _raw_bytes, _, _, addr = s.recvmsg(PACKET_MAX)
                     try:
                         ts = _raw_bytes[20:]
                         tid = (Shifter.get_id(ts), *addr)
