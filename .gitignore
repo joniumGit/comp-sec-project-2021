@@ -1,7 +1,6 @@
 venv
 .idea
 out
-old
 *.egg-info
 __pycache__
 .DS_Store
