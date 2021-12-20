@@ -19,7 +19,7 @@ BPO = Literal[
 
 class Protocol:
     PREFIX: int = 0x1 << 7  # Custom timestamp flag (RFC 791)
-    TRANSMISSION: int = 0x1 << 6  # Transmission 0 | Message 1
+    TRANSMISSION: int = 0x1 << 6  # Transmission 1 | Message 0
     TYPE_POSITION = 24
     ID_POSITION = 8
 

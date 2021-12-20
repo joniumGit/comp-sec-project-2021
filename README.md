@@ -37,6 +37,21 @@ WORD 3 DATA
 
 WORD X DATA
 
+#### Message Transport
+
+The data that is passed through the channel is encrypted and verified with `ChaCha20Poly1305`. Every message gets a
+unique nonce from `os.urandom(12)`. The data is encrypted and then split into packets.
+
+The data is transported with nonce first using the `TYPE` field with values `0010` for encryption and `0001` for data.
+
+The head marks the first and last packets for current data frame by setting the `HEAD` to `1001` for start and `1010`
+for end. Plain data transmission is marked with `1100`.
+
+The `ID` field identifies a single transaction and provides `65,536` distinct values for each `ip-port` combo.
+The `data len` field allows up to `256` words (`~1KB`) of data in a single packet.
+
+The design is due to the limits in the IP Option size.
+
 #### Example data embedding
 
 This is how it can be used in IP Options or in ICMP payload:
